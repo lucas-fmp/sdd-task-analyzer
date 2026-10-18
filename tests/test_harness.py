@@ -13,6 +13,8 @@ import pytest
 
 from src.task_analyzer import TaskValidationError, analyze_tasks
 
+CASOS: list[tuple[str, str, str]] = []
+
 
 def _dt(texto: str) -> datetime:
     """Converte o texto do exemplo da spec em datetime ingênuo (UTC)."""
@@ -68,6 +70,57 @@ def _exemplo_cenario_1() -> list[dict]:
     ]
 
 
+def anotar(titulo: str, entrada: str, saida: str) -> None:
+    """Guarda um cenário para o resumo impresso no fim do pytest."""
+    CASOS.append((titulo, entrada, saida))
+
+
+def _hora(valor: datetime) -> str:
+    """Formata um datetime do exemplo como hora."""
+    return valor.strftime("%H:%M")
+
+
+def _descrever_entrada(tarefas: list[dict]) -> str:
+    """Resume a lista enviada para o relatório do terminal."""
+    if not tarefas:
+        return "(lista vazia)"
+    linhas = []
+    for tarefa in tarefas:
+        linhas.append(
+            "id={id_tarefa} {prioridade} {status} | "
+            "criacao={criacao} inicio={inicio} conclusao={conclusao} prazo={prazo}".format(
+                criacao=_hora(tarefa["data_criacao"]),
+                inicio=_hora(tarefa["data_inicio"]),
+                conclusao=_hora(tarefa["data_conclusao"]),
+                prazo=_hora(tarefa["prazo"]),
+                **{chave: tarefa[chave] for chave in ("id_tarefa", "prioridade", "status")},
+            )
+        )
+    return "\n".join(linhas)
+
+
+def _descrever_saida(relatorio: dict) -> str:
+    """Resume o relatório devolvido por analyze_tasks."""
+    linhas = [
+        f"total_tarefas={relatorio['total_tarefas']}",
+        f"total_concluidas={relatorio['total_concluidas']}",
+        f"total_pendentes={relatorio['total_pendentes']}",
+        f"tempo_medio_conclusao_horas={relatorio['tempo_medio_conclusao_horas']:.2f}",
+        f"taxa_atraso_percentual={relatorio['taxa_atraso_percentual']:.2f}",
+    ]
+    for prioridade, bloco in relatorio["indicadores_por_prioridade"].items():
+        linhas.append(
+            f"{prioridade}: {bloco['tempo_medio_conclusao_horas']:.2f} h, "
+            f"atraso {bloco['taxa_atraso_percentual']:.2f}%"
+        )
+    return "\n".join(linhas)
+
+
+def _descrever_erro(erro: BaseException) -> str:
+    """Resume a exceção esperada."""
+    return f"{type(erro).__name__}: {erro}"
+
+
 def _zeros_prioridade() -> dict[str, dict[str, float]]:
     """Indicadores vazios, uma chave por prioridade."""
     return {
@@ -103,6 +156,11 @@ def test_cenario_sucesso_metricas_corretas() -> None:
         "tempo_medio_conclusao_horas": 1.5,
         "taxa_atraso_percentual": 0.0,
     }
+    anotar(
+        "1. Sucesso — exemplo numerico",
+        _descrever_entrada(_exemplo_cenario_1()),
+        _descrever_saida(relatorio),
+    )
 
 
 def test_ignora_pendente_e_cancelada() -> None:
@@ -131,8 +189,13 @@ def test_data_conclusao_antes_da_criacao_lanca_task_validation_error() -> None:
             data_conclusao=_dt("2026-01-01 11:00"),
         )
     ]
-    with pytest.raises(TaskValidationError, match=r"id_tarefa=7"):
+    with pytest.raises(TaskValidationError, match=r"id_tarefa=7") as erro:
         analyze_tasks(tarefas)
+    anotar(
+        "2. Data inconsistente — conclusao antes da criacao",
+        _descrever_entrada(tarefas),
+        _descrever_erro(erro.value),
+    )
 
 
 def test_lista_sem_concluidas_retorna_zero() -> None:
@@ -147,6 +210,11 @@ def test_lista_sem_concluidas_retorna_zero() -> None:
     assert relatorio["total_pendentes"] == 1
     assert relatorio["tempo_medio_conclusao_horas"] == 0.0
     assert relatorio["taxa_atraso_percentual"] == 0.0
+    anotar(
+        "3. Sem concluidas — so pendente e cancelada",
+        _descrever_entrada(tarefas),
+        _descrever_saida(relatorio),
+    )
 
 
 def test_lista_vazia_retorna_zero() -> None:
@@ -158,17 +226,28 @@ def test_lista_vazia_retorna_zero() -> None:
     assert relatorio["tempo_medio_conclusao_horas"] == 0.0
     assert relatorio["taxa_atraso_percentual"] == 0.0
     assert relatorio["indicadores_por_prioridade"] == _zeros_prioridade()
+    anotar("4. Lista vazia", _descrever_entrada([]), _descrever_saida(relatorio))
 
 
 def test_prioridade_invalida_lanca_task_validation_error() -> None:
     """Prioridade fora do enumerador."""
     tarefas = [_tarefa(id_tarefa=3, prioridade="urgente")]
-    with pytest.raises(TaskValidationError, match="id_tarefa=3"):
+    with pytest.raises(TaskValidationError, match="id_tarefa=3") as erro:
         analyze_tasks(tarefas)
+    anotar(
+        "5. Prioridade invalida",
+        _descrever_entrada(tarefas),
+        _descrever_erro(erro.value),
+    )
 
 
 def test_id_duplicado_lanca_task_validation_error() -> None:
     """id_tarefa repetido no lote."""
     tarefas = [_tarefa(id_tarefa=4), _tarefa(id_tarefa=4, prioridade="média")]
-    with pytest.raises(TaskValidationError, match="id_tarefa=4"):
+    with pytest.raises(TaskValidationError, match="id_tarefa=4") as erro:
         analyze_tasks(tarefas)
+    anotar(
+        "6. id duplicado",
+        _descrever_entrada(tarefas),
+        _descrever_erro(erro.value),
+    )
