@@ -21,18 +21,18 @@ Antes de escrever código, leia também [`specs/task_analyzer_spec.md`](specs/ta
 Único ponto de entrada público:
 
 ```python
-def analisar_tarefas(tarefas: list[dict]) -> dict:
+def analyze_tasks(tarefas: list[dict]) -> dict:
 ```
 
 Módulo: `src/task_analyzer.py`.
 
-Exceções documentadas, todas filhas de `TaskAnalyzerError`:
+Exceção de validação, filha de `TaskAnalyzerError`:
 
-- `EntradaInvalidaError`
-- `DataInconsistenteError`
-- `NenhumaTarefaConcluidaError`
+- `TaskValidationError`
 
-Não alterar nome, parâmetros nem tipo de retorno sem nova versão da spec.
+Lista vazia ou sem tarefas concluídas devolve médias e taxa `0.0`. Não é erro.
+
+Não alterar nome, parâmetros nem tipo de retorno sem nova versão da spec. A versão 2.0 fez essa troca porque o enunciado da Fase 2 definiu o nome `analyze_tasks`.
 
 ## Proibições explícitas
 
@@ -40,13 +40,14 @@ Não alterar nome, parâmetros nem tipo de retorno sem nova versão da spec.
 - Não alterar, remover ou adaptar os cenários de teste da spec.
 - Não modificar a árvore de pastas do repositório.
 - Não persistir dados em arquivo ou banco.
-- Não alterar a assinatura pública de `analisar_tarefas`.
+- Não alterar a assinatura pública de `analyze_tasks`.
 - Não gerar funcionalidade nova sem teste correspondente.
 - Não inserir código duplicado ou morto.
 - Não assumir comportamento que a spec não descreve (campo `title`, API web, persistência, Flask).
 - Não comentar o óbvio.
 - Não devolver formato de saída diferente do `RelatorioMetricas`.
-- Não engolir `DataInconsistenteError` nem `NenhumaTarefaConcluidaError` retornando zero.
+- Não lançar exceção quando não houver tarefas concluídas: médias e taxa ficam `0.0`.
+- Não devolver tempo em minutos. A unidade do contrato é hora.
 
 ## Bibliotecas autorizadas
 

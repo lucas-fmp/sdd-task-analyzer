@@ -1,7 +1,7 @@
 """Analisa tarefas e devolve métricas de produtividade.
 
-O contrato está em ``specs/task_analyzer_spec.md``. Este módulo valida a
-entrada, calcula tempo médio e taxa de atraso e não persiste dados.
+O contrato vigente é a versão 2.0 de ``specs/task_analyzer_spec.md``.
+O tempo sai em horas. Lote sem tarefas concluídas devolve 0.0.
 """
 
 from __future__ import annotations
@@ -29,50 +29,36 @@ class TaskAnalyzerError(Exception):
     """Erro de domínio do TaskAnalyzer."""
 
 
-class EntradaInvalidaError(TaskAnalyzerError):
-    """Entrada malformada, tipo incorreto ou enumerador inválido."""
+class TaskValidationError(TaskAnalyzerError):
+    """Entrada inválida ou datas inconsistentes."""
 
 
-class DataInconsistenteError(TaskAnalyzerError):
-    """Datas violam data_criacao <= data_inicio <= data_conclusao."""
-
-
-class NenhumaTarefaConcluidaError(TaskAnalyzerError):
-    """Não há tarefas concluídas; calcular métricas causaria divisão por zero."""
-
-
-def analisar_tarefas(tarefas: list[dict]) -> dict:
+def analyze_tasks(tarefas: list[dict]) -> dict:
     """Analisa um conjunto de tarefas e devolve métricas de produtividade.
 
     Args:
         tarefas: Lista de dicionários no formato TarefaEntrada da spec.
 
     Returns:
-        RelatorioMetricas com tempo médio, taxa de atraso, quantidade e
-        indicadores por prioridade.
+        RelatorioMetricas com totais, tempo médio em horas, taxa de atraso
+        e os mesmos indicadores por prioridade. Sem concluídas, as médias
+        e a taxa são 0.0.
 
     Raises:
-        EntradaInvalidaError: Estrutura, tipo ou enumerador inválido.
-        DataInconsistenteError: Ordem temporal das datas violada.
-        NenhumaTarefaConcluidaError: Nenhuma tarefa com status concluída.
+        TaskValidationError: Estrutura, tipo, enumerador ou data inválidos.
     """
     recebidas = len(tarefas) if isinstance(tarefas, list) else "entrada_invalida"
     logger.info("analise_iniciada quantidade_recebida=%s", recebidas)
     try:
         validadas = _validar_entrada(tarefas)
-        concluidas = _filtrar_concluidas(validadas)
-        if not concluidas:
-            raise NenhumaTarefaConcluidaError(
-                f"quantidade_recebida={len(validadas)} quantidade_concluida=0"
-            )
-        relatorio = _montar_relatorio(concluidas)
+        relatorio = _montar_relatorio(validadas)
     except TaskAnalyzerError:
         logger.error("analise_falhou quantidade_recebida=%s", recebidas)
         raise
     logger.info(
         "analise_concluida quantidade_recebida=%s quantidade_considerada=%s",
         recebidas,
-        relatorio["quantidade_tarefas"],
+        relatorio["total_concluidas"],
     )
     return relatorio
 
@@ -87,11 +73,10 @@ def _validar_entrada(tarefas: list[dict]) -> list[dict]:
         A mesma lista, depois das validações estrutural, de tipo e de data.
 
     Raises:
-        EntradaInvalidaError: A lista ou algum item não cumpre o contrato.
-        DataInconsistenteError: Alguma tarefa quebra a ordem das datas.
+        TaskValidationError: A lista, um item ou uma data não cumpre o contrato.
     """
     if not isinstance(tarefas, list):
-        raise EntradaInvalidaError("a entrada deve ser uma lista de dicionários")
+        raise TaskValidationError("a entrada deve ser uma lista de dicionários")
     validadas: list[dict] = []
     ids_vistos: set[int] = set()
     for indice, tarefa in enumerate(tarefas):
@@ -99,7 +84,7 @@ def _validar_entrada(tarefas: list[dict]) -> list[dict]:
         _validar_datas(tarefa)
         identificador = tarefa["id_tarefa"]
         if identificador in ids_vistos:
-            raise EntradaInvalidaError(f"id_tarefa={identificador} duplicado no lote")
+            raise TaskValidationError(f"id_tarefa={identificador} duplicado no lote")
         ids_vistos.add(identificador)
         validadas.append(tarefa)
     return validadas
@@ -113,42 +98,42 @@ def _validar_tarefa(tarefa: object, indice: int) -> None:
         indice: Posição do item, usada na mensagem quando ainda não há id.
 
     Raises:
-        EntradaInvalidaError: Campo, tipo ou enumerador fora do contrato.
+        TaskValidationError: Campo, tipo ou enumerador fora do contrato.
     """
     if not isinstance(tarefa, dict):
-        raise EntradaInvalidaError(f"item {indice} não é um dicionário")
+        raise TaskValidationError(f"item {indice} não é um dicionário")
     faltando = [campo for campo in _CAMPOS_OBRIGATORIOS if campo not in tarefa]
     extras = [campo for campo in tarefa if campo not in _CAMPOS_OBRIGATORIOS]
     if faltando or extras:
-        raise EntradaInvalidaError(
+        raise TaskValidationError(
             f"item {indice} campos_faltando={faltando} campos_extras={extras}"
         )
     _validar_id(tarefa)
     _validar_datetimes(tarefa)
     if tarefa["prioridade"] not in _PRIORIDADES:
-        raise EntradaInvalidaError(
+        raise TaskValidationError(
             f"id_tarefa={tarefa['id_tarefa']} prioridade inválida: {tarefa['prioridade']!r}"
         )
     if tarefa["status"] not in _STATUS:
-        raise EntradaInvalidaError(
+        raise TaskValidationError(
             f"id_tarefa={tarefa['id_tarefa']} status inválido: {tarefa['status']!r}"
         )
 
 
 def _validar_id(tarefa: dict) -> None:
-    """Garante id inteiro, positivo e único no formato.
+    """Garante id inteiro e positivo.
 
     Args:
         tarefa: Tarefa já com a chave ``id_tarefa``.
 
     Raises:
-        EntradaInvalidaError: Id ausente no tipo certo ou menor ou igual a zero.
+        TaskValidationError: Id fora do tipo ou menor ou igual a zero.
     """
     identificador = tarefa["id_tarefa"]
     if isinstance(identificador, bool) or not isinstance(identificador, int):
-        raise EntradaInvalidaError(f"id_tarefa inválido: {identificador!r}")
+        raise TaskValidationError(f"id_tarefa inválido: {identificador!r}")
     if identificador <= 0:
-        raise EntradaInvalidaError(f"id_tarefa={identificador} deve ser > 0")
+        raise TaskValidationError(f"id_tarefa={identificador} deve ser > 0")
 
 
 def _validar_datetimes(tarefa: dict) -> None:
@@ -158,68 +143,74 @@ def _validar_datetimes(tarefa: dict) -> None:
         tarefa: Tarefa com as chaves de data presentes.
 
     Raises:
-        EntradaInvalidaError: Valor que não é datetime ou que não está em UTC.
+        TaskValidationError: Valor que não é datetime ou que não está em UTC.
     """
     for campo in _CAMPOS_DATA:
         valor = tarefa[campo]
         if not isinstance(valor, datetime):
-            raise EntradaInvalidaError(
+            raise TaskValidationError(
                 f"id_tarefa={tarefa['id_tarefa']} {campo} deve ser datetime"
             )
         if valor.tzinfo is not None and valor.utcoffset() != timezone.utc.utcoffset(valor):
-            raise EntradaInvalidaError(
+            raise TaskValidationError(
                 f"id_tarefa={tarefa['id_tarefa']} {campo} deve estar em UTC"
             )
 
 
 def _validar_datas(tarefa: dict) -> None:
-    """Exige data_criacao <= data_inicio <= data_conclusao.
+    """Rejeita conclusão anterior à criação e as outras inversões.
 
     Args:
         tarefa: Tarefa com datetimes já validados.
 
     Raises:
-        DataInconsistenteError: A ordem temporal foi violada.
+        TaskValidationError: A ordem temporal foi violada.
     """
     criacao = tarefa["data_criacao"]
     inicio = tarefa["data_inicio"]
     conclusao = tarefa["data_conclusao"]
     identificador = tarefa["id_tarefa"]
+    if conclusao < criacao:
+        raise TaskValidationError(
+            f"id_tarefa={identificador} data_conclusao={conclusao.isoformat()} "
+            f"data_criacao={criacao.isoformat()}"
+        )
     if criacao > inicio:
-        raise DataInconsistenteError(
+        raise TaskValidationError(
             f"id_tarefa={identificador} data_criacao={criacao.isoformat()} "
             f"data_inicio={inicio.isoformat()}"
         )
     if inicio > conclusao:
-        raise DataInconsistenteError(
+        raise TaskValidationError(
             f"id_tarefa={identificador} data_inicio={inicio.isoformat()} "
             f"data_conclusao={conclusao.isoformat()}"
         )
 
 
-def _filtrar_concluidas(tarefas: list[dict]) -> list[dict]:
-    """Mantém só as tarefas com status concluída.
+def _filtrar(tarefas: list[dict], status: str) -> list[dict]:
+    """Mantém as tarefas de um status.
 
     Args:
         tarefas: Lote já validado.
+        status: Status desejado.
 
     Returns:
-        Sublista das tarefas concluídas, na ordem original.
+        Sublista na ordem original.
     """
-    return [tarefa for tarefa in tarefas if tarefa["status"] == "concluída"]
+    return [tarefa for tarefa in tarefas if tarefa["status"] == status]
 
 
-def _tempo_minutos(tarefa: dict) -> float:
-    """Calcula a duração da tarefa em minutos.
+def _horas(tarefa: dict) -> float:
+    """Calcula a duração da tarefa em horas.
 
     Args:
         tarefa: Tarefa concluída com datas consistentes.
 
     Returns:
-        Minutos entre o início e a conclusão.
+        Horas entre o início e a conclusão.
     """
     delta = tarefa["data_conclusao"] - tarefa["data_inicio"]
-    return delta.total_seconds() / 60
+    return delta.total_seconds() / 3600
 
 
 def _esta_atrasada(tarefa: dict) -> bool:
@@ -234,49 +225,61 @@ def _esta_atrasada(tarefa: dict) -> bool:
     return tarefa["data_conclusao"] > tarefa["prazo"]
 
 
-def _indicadores(tarefas: list[dict]) -> dict[str, int | float]:
-    """Monta quantidade, tempo médio e taxa de atraso de um grupo.
+def _media_horas(tarefas: list[dict]) -> float:
+    """Média de duração em horas, ou 0.0 se o grupo estiver vazio.
 
     Args:
-        tarefas: Tarefas concluídas do grupo. Pode ser vazia.
+        tarefas: Tarefas concluídas do grupo.
 
     Returns:
-        Indicadores do grupo. Grupo vazio devolve zeros, sem divisão.
+        Média arredondada em duas casas.
     """
     if not tarefas:
-        return {
-            "quantidade_tarefas": 0,
-            "tempo_medio_conclusao_min": 0.0,
-            "taxa_atraso_percentual": 0.0,
-        }
-    tempos = [_tempo_minutos(tarefa) for tarefa in tarefas]
-    atrasadas = sum(1 for tarefa in tarefas if _esta_atrasada(tarefa))
-    return {
-        "quantidade_tarefas": len(tarefas),
-        "tempo_medio_conclusao_min": round(sum(tempos) / len(tempos), 2),
-        "taxa_atraso_percentual": round(atrasadas / len(tarefas) * 100, 2),
-    }
+        return 0.0
+    return round(sum(_horas(tarefa) for tarefa in tarefas) / len(tarefas), 2)
 
 
-def _montar_relatorio(concluidas: list[dict]) -> dict:
-    """Agrega o relatório geral e o recorte por prioridade.
+def _taxa_atraso(tarefas: list[dict]) -> float:
+    """Taxa de atraso percentual, ou 0.0 se o grupo estiver vazio.
 
     Args:
-        concluidas: Tarefas concluídas. A lista não pode ser vazia.
+        tarefas: Tarefas concluídas do grupo.
 
     Returns:
-        RelatorioMetricas no formato do contrato.
+        Percentual arredondado em duas casas.
     """
-    geral = _indicadores(concluidas)
+    if not tarefas:
+        return 0.0
+    atrasadas = sum(1 for tarefa in tarefas if _esta_atrasada(tarefa))
+    return round(atrasadas / len(tarefas) * 100, 2)
+
+
+def _montar_relatorio(tarefas: list[dict]) -> dict:
+    """Agrega totais, métricas gerais e o recorte por prioridade.
+
+    Args:
+        tarefas: Lote validado, com qualquer status.
+
+    Returns:
+        RelatorioMetricas no formato da versão 2.0.
+    """
+    concluidas = _filtrar(tarefas, "concluída")
     por_prioridade = {
-        prioridade: _indicadores(
-            [tarefa for tarefa in concluidas if tarefa["prioridade"] == prioridade]
-        )
+        prioridade: {
+            "tempo_medio_conclusao_horas": _media_horas(
+                [tarefa for tarefa in concluidas if tarefa["prioridade"] == prioridade]
+            ),
+            "taxa_atraso_percentual": _taxa_atraso(
+                [tarefa for tarefa in concluidas if tarefa["prioridade"] == prioridade]
+            ),
+        }
         for prioridade in _PRIORIDADES
     }
     return {
-        "tempo_medio_conclusao_min": geral["tempo_medio_conclusao_min"],
-        "taxa_atraso_percentual": geral["taxa_atraso_percentual"],
-        "quantidade_tarefas": geral["quantidade_tarefas"],
+        "total_tarefas": len(tarefas),
+        "total_concluidas": len(concluidas),
+        "total_pendentes": len(_filtrar(tarefas, "pendente")),
+        "tempo_medio_conclusao_horas": _media_horas(concluidas),
+        "taxa_atraso_percentual": _taxa_atraso(concluidas),
         "indicadores_por_prioridade": por_prioridade,
     }

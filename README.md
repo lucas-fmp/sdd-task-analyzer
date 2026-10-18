@@ -4,15 +4,15 @@ Módulo Python de análise de produtividade de tarefas. Projeto da disciplina **
 
 Autor: **Lucas Fernando Macedo Pereira**  
 Curso: Ciência da Computação - Campus Asa Norte, turma 2024-2  
-Especificação: versão 1.0 (8 de setembro de 2026)
+Especificação: versão 2.0 (17 de outubro de 2026)
 
 ## O que este repositório é nesta fase
 
-A **Fase 2** implementa `analisar_tarefas` e o Test Harness em `pytest`, seguindo o contrato da Fase 1. O código foi gerado com assistência de IA e homologado contra `specs/task_analyzer_spec.md` e `CONTEXT_RULES.md`.
+A **Fase 2** implementa `analyze_tasks` e o Test Harness em `pytest`. O enunciado desta fase fechou a função, a unidade (horas) e o caso sem concluídas (`0.0`). A spec vigente é a versão 2.0.
 
 O TaskAnalyzer recebe uma lista de tarefas em memória e devolve métricas:
 
-- tempo médio de conclusão (minutos);
+- tempo médio de conclusão (horas);
 - taxa de atraso percentual;
 - quantidade de tarefas concluídas;
 - os mesmos indicadores quebrados por prioridade (`baixa`, `média`, `alta`).
@@ -38,14 +38,14 @@ sdd-task-analyzer/
 ## Contrato público (congelado)
 
 ```python
-def analisar_tarefas(tarefas: list[dict]) -> dict:
+def analyze_tasks(tarefas: list[dict]) -> dict:
 ```
 
-Exceções de domínio:
+Exceção de validação:
 
-- `EntradaInvalidaError`
-- `DataInconsistenteError`
-- `NenhumaTarefaConcluidaError`
+- `TaskValidationError`
+
+Sem tarefas concluídas, médias e taxa voltam `0.0`.
 
 Detalhes de campos, regras e exemplos numéricos: [`specs/task_analyzer_spec.md`](specs/task_analyzer_spec.md).  
 Regras para geração de código: [`CONTEXT_RULES.md`](CONTEXT_RULES.md).
