@@ -8,7 +8,7 @@ Especificação: versão 1.0 (8 de setembro de 2026)
 
 ## O que este repositório é nesta fase
 
-Esta é a **Fase 1**: planejamento e especificação. O contrato executável já está fechado; a implementação e os testes automatizados entram na **Fase 2**.
+A **Fase 2** implementa `analisar_tarefas` e o Test Harness em `pytest`, seguindo o contrato da Fase 1. O código foi gerado com assistência de IA e homologado contra `specs/task_analyzer_spec.md` e `CONTEXT_RULES.md`.
 
 O TaskAnalyzer recebe uma lista de tarefas em memória e devolve métricas:
 
@@ -65,8 +65,8 @@ Python mínimo: **3.11+**.
 
 | Fase | Conteúdo | Status |
 | --- | --- | --- |
-| 1 | Especificação SDD, `CONTEXT_RULES`, estrutura do repositório, vídeo | em andamento |
-| 2 | Código gerado com IA, pytest, Git Flow e Pull Requests | próxima |
+| 1 | Especificação SDD, `CONTEXT_RULES`, estrutura do repositório, vídeo | concluída |
+| 2 | Código gerado com IA, pytest, Git Flow e Pull Requests | esta entrega |
 | 3 | GitHub Actions, Docker, relatório de governança e ética | depois |
 
 ## Bibliotecas autorizadas
