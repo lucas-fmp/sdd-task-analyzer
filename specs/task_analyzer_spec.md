@@ -1,7 +1,7 @@
 # Especificação SDD - TaskAnalyzer
 
-**Versão:** 1.0  
-**Data:** 8 de setembro de 2026  
+**Versão:** 2.0  
+**Data:** 17 de outubro de 2026  
 **Autor:** Lucas Fernando Macedo Pereira  
 **Curso:** Ciência da Computação - Campus Asa Norte, turma 2024-2  
 **E-mail:** lucaspereira.lp@sempreceub.com
@@ -53,23 +53,23 @@ O TaskAnalyzer recebe um conjunto de tarefas já registradas e devolve um relat�
 ### UC01 - Analisar produtividade de um conjunto válido
 
 - **Pré-condição:** ao menos uma tarefa `concluída`; todos os campos válidos; datas consistentes.
-- **Fluxo:** o cliente chama `analisar_tarefas`; o módulo valida, filtra, calcula e devolve `RelatorioMetricas`.
+- **Fluxo:** o cliente chama `analyze_tasks`; o módulo valida, filtra, calcula e devolve `RelatorioMetricas`.
 - **Pós-condição:** tempo médio, taxa de atraso, quantidade e indicadores por prioridade corretos.
 
 ### UC02 - Rejeitar datas inconsistentes
 
 - **Pré-condição:** ao menos uma tarefa viola a ordem temporal das datas.
-- **Pós-condição:** `DataInconsistenteError`; nenhuma métrica parcial.
+- **Pós-condição:** `TaskValidationError`; nenhuma métrica parcial.
 
 ### UC03 - Rejeitar conjunto sem tarefas concluídas
 
 - **Pré-condição:** entrada estruturalmente válida, porém zero tarefas `concluída`.
-- **Pós-condição:** `NenhumaTarefaConcluidaError`. Não se retorna zero.
+- **Pós-condição:** o relatório volta com médias e taxa em `0.0`. Não há exceção.
 
 ### UC04 - Rejeitar entrada malformada
 
 - **Pré-condição:** campo faltando, tipo errado, enumerador inválido ou entrada que não é lista de dicionários.
-- **Pós-condição:** `EntradaInvalidaError`.
+- **Pós-condição:** `TaskValidationError`.
 
 ## 5. Requisitos
 
@@ -77,17 +77,17 @@ O TaskAnalyzer recebe um conjunto de tarefas já registradas e devolve um relat�
 
 | ID | Requisito |
 | --- | --- |
-| RF01 | Expor a função pública `analisar_tarefas(tarefas)`. |
+| RF01 | Expor a função pública `analyze_tasks(tarefas)`. |
 | RF02 | Validar todos os campos obrigatórios antes de calcular. |
 | RF03 | Aceitar apenas `prioridade` em `{baixa, média, alta}` e `status` em `{concluída, pendente, cancelada}`. |
-| RF04 | Validar datas e lançar `DataInconsistenteError` em caso de violação. |
+| RF04 | Validar datas e lançar `TaskValidationError` quando `data_conclusao < data_criacao`. |
 | RF05 | Considerar somente `status == "concluída"` nos cálculos. |
-| RF06 | Tempo de uma tarefa = `data_conclusao − data_inicio` em minutos, 2 casas. |
+| RF06 | Tempo de uma tarefa = `data_conclusao − data_inicio` em horas, 2 casas. |
 | RF07 | Atrasada quando `data_conclusao > prazo`. Empate no prazo não é atraso. |
 | RF08 | Taxa de atraso = `(atrasadas / concluídas) * 100`, 2 casas. |
 | RF09 | Devolver `indicadores_por_prioridade` com chaves `baixa`, `média` e `alta`. |
-| RF10 | Prioridade sem concluídas: `0`, `0.00`, `0.00`. Sem exceção. |
-| RF11 | Zero concluídas no lote: `NenhumaTarefaConcluidaError`. Proibido mascarar com `0.00`. |
+| RF10 | Prioridade sem concluídas: tempo e taxa `0.0` naquela chave. Sem exceção. |
+| RF11 | Zero concluídas no lote (lista vazia ou só pendente/cancelada): médias e taxa voltam `0.0`, sem exceção. |
 | RF12 | Logs estruturados (início, recebidas, consideradas, sucesso ou falha). |
 
 ### Não funcionais
@@ -109,23 +109,23 @@ O TaskAnalyzer recebe um conjunto de tarefas já registradas e devolve um relat�
 
 ## 6. Fluxo do sistema
 
-1. O cliente chama `analisar_tarefas(tarefas)`.
+1. O cliente chama `analyze_tasks(tarefas)`.
 2. Validação estrutural: `list[dict]` com exatamente os campos do contrato.
 3. Validação de enumeradores.
-4. Validação temporal: `data_criacao <= data_inicio <= data_conclusao`.
+4. Validação temporal: `data_conclusao < data_criacao` lança `TaskValidationError`. A mesma exceção cobre início anterior à criação ou conclusão anterior ao início.
 5. Filtro: permanece só `concluída`.
-6. Se o filtro resultar em zero, `NenhumaTarefaConcluidaError`.
+6. Se o filtro resultar em zero, médias e taxa ficam `0.0` e o relatório ainda é devolvido.
 7. Cálculo geral.
 8. Cálculo por prioridade.
 9. Montagem e retorno de `RelatorioMetricas`.
-10. Falha nas etapas 2 a 6 não produz relatório parcial.
+10. Falha nas etapas 2 a 4 não produz relatório parcial.
 
 ## 7. Contrato de interface
 
 ### 7.1 Entrada
 
 ```text
-analisar_tarefas(tarefas: list[TarefaEntrada]) -> RelatorioMetricas
+analyze_tasks(tarefas: list[TarefaEntrada]) -> RelatorioMetricas
 ```
 
 | Campo | Tipo | Obrigatório | Domínio |
@@ -138,24 +138,27 @@ analisar_tarefas(tarefas: list[TarefaEntrada]) -> RelatorioMetricas
 | `prioridade` | `str` | sim | `baixa` \| `média` \| `alta` |
 | `status` | `str` | sim | `concluída` \| `pendente` \| `cancelada` |
 
-Não existe campo `title`. Campo extra ou ausente → `EntradaInvalidaError`.
+Não existe campo `title`. Campo extra, ausente, tipo errado ou enumerador inválido → `TaskValidationError`.
 
-Datas inconsistentes → `DataInconsistenteError`. Não se ignora a tarefa.
+`data_conclusao < data_criacao` → `TaskValidationError`. Não se ignora a tarefa.
 
 ### 7.2 Saída (`RelatorioMetricas`)
 
+Definida pelo enunciado da Fase 2.
+
 | Campo | Tipo | Significado |
 | --- | --- | --- |
-| `tempo_medio_conclusao_min` | `float` | média em minutos, 2 casas |
-| `taxa_atraso_percentual` | `float` | 0.00 a 100.00, 2 casas |
-| `quantidade_tarefas` | `int` | só concluídas |
-| `indicadores_por_prioridade` | `dict` | sempre as três chaves abaixo |
+| `total_tarefas` | `int` | todas as tarefas do lote |
+| `total_concluidas` | `int` | status `concluída` |
+| `total_pendentes` | `int` | status `pendente` (cancelada não entra aqui) |
+| `tempo_medio_conclusao_horas` | `float` | média em horas, 2 casas; `0.0` se não houver concluída |
+| `taxa_atraso_percentual` | `float` | 0.00 a 100.00; `0.0` se não houver concluída |
+| `indicadores_por_prioridade` | `dict` | sempre `baixa`, `média` e `alta` |
 
 ```text
 {
   "baixa": {
-    "quantidade_tarefas": int,
-    "tempo_medio_conclusao_min": float,
+    "tempo_medio_conclusao_horas": float,
     "taxa_atraso_percentual": float
   },
   "média": { ... },
@@ -163,35 +166,34 @@ Datas inconsistentes → `DataInconsistenteError`. Não se ignora a tarefa.
 }
 ```
 
-A soma das três `quantidade_tarefas` é igual à `quantidade_tarefas` geral.
-
-### 7.3 Assinatura pública (congelada)
+### 7.3 Assinatura pública
 
 ```python
-def analisar_tarefas(tarefas: list[dict]) -> dict:
+def analyze_tasks(tarefas: list[dict]) -> dict:
 ```
 
 Módulo: `src/task_analyzer.py`.
 
-### 7.4 Exceções
+### 7.4 Exceção
 
-Todas herdam de `TaskAnalyzerError`.
+`TaskValidationError` herda de `TaskAnalyzerError`.
 
-| Exceção | Quando | Mensagem deve conter |
-| --- | --- | --- |
-| `EntradaInvalidaError` | tipo errado, campo faltando/extra, enumerador inválido, `id_tarefa <= 0`, id duplicado | o que falhou e, se possível, o `id_tarefa` |
-| `DataInconsistenteError` | quebra de `data_criacao <= data_inicio <= data_conclusao` | `id_tarefa` e as duas datas |
-| `NenhumaTarefaConcluidaError` | zero concluídas após validação | quantidade recebida e quantidade concluída (0) |
+| Quando | Mensagem deve conter |
+| --- | --- |
+| tipo errado, campo faltando/extra, enumerador inválido, `id_tarefa <= 0`, id duplicado | o que falhou e, se possível, o `id_tarefa` |
+| `data_conclusao < data_criacao` (e as outras inversões de data) | `id_tarefa` e as duas datas |
+
+Lista vazia ou lote sem concluídas não é exceção.
 
 ### 7.5 Regras de negócio
 
-- RN01. Só `concluída` entra nos cálculos.
-- RN02. Tempo = `(data_conclusao − data_inicio)` em minutos, 2 casas.
+- RN01. Só `concluída` entra no tempo médio e na taxa de atraso.
+- RN02. Tempo = `(data_conclusao − data_inicio)` em horas, 2 casas.
 - RN03. Atrasada ⇔ `data_conclusao > prazo`.
-- RN04. Taxa = `(atrasadas / concluídas) * 100`.
-- RN05. Data inconsistente → exceção. Não se ignora.
-- RN06. Zero concluídas → exceção. Não se retorna `0.00`.
-- RN07. Prioridade vazia → `0` / `0.00` / `0.00`.
+- RN04. Taxa = `(atrasadas / concluídas) * 100`. Sem concluídas, a taxa é `0.0`.
+- RN05. `data_conclusao < data_criacao` → `TaskValidationError`. Não se ignora.
+- RN06. Zero concluídas → médias e taxa `0.0`. Não se lança exceção.
+- RN07. Prioridade sem concluídas → `0.0` / `0.0` naquela chave.
 - RN08. UTC.
 - RN09. 2 casas decimais.
 - RN10. Sem persistência.
@@ -203,8 +205,8 @@ Todas herdam de `TaskAnalyzerError`.
 ### Cenário 1 - Sucesso (métricas corretas)
 
 **Dado** um conjunto válido com prioridades e status misturados  
-**Quando** `analisar_tarefas` for executada  
-**Então** considera só as concluídas e devolve métricas gerais e por prioridade corretas.
+**Quando** `analyze_tasks` for executada  
+**Então** considera só as concluídas no tempo e no atraso, e devolve totais, média em horas e taxa, no geral e por prioridade.
 
 Exemplo numérico (UTC):
 
@@ -218,55 +220,53 @@ Exemplo numérico (UTC):
 
 Resultado esperado:
 
-- concluídas: ids 1, 2 e 3 → `quantidade_tarefas = 3`
-- tempos: 60.00, 180.00, 90.00 → média geral `110.00`
+- `total_tarefas = 5`, `total_concluidas = 3`, `total_pendentes = 1`
+- durações: 1.00 h, 3.00 h e 1.50 h → média geral `1.83`
 - atrasada: só id 2 → taxa geral `33.33`
-- `alta`: qtd 2, tempo `120.00`, taxa `50.00`
-- `média`: qtd 1, tempo `90.00`, taxa `0.00`
-- `baixa`: qtd 0, tempo `0.00`, taxa `0.00`
+- `alta`: tempo `2.00`, taxa `50.00`
+- `média`: tempo `1.50`, taxa `0.00`
+- `baixa`: tempo `0.00`, taxa `0.00`
 
 ### Cenário 2 - Data inconsistente
 
-**Dado** `data_conclusao` anterior a `data_inicio` (ou `data_inicio` anterior a `data_criacao`)  
+**Dado** `data_conclusao` anterior a `data_criacao`  
 **Quando** a função for executada  
-**Então** lança `DataInconsistenteError` identificando o `id_tarefa`.
+**Então** lança `TaskValidationError` identificando o `id_tarefa`.
 
 ### Cenário 3 - Zero tarefas concluídas
 
 **Dado** lista vazia ou só `pendente`/`cancelada`  
 **Quando** a função for executada  
-**Então** lança `NenhumaTarefaConcluidaError`.
+**Então** devolve médias e taxa `0.0`, sem exceção.
 
 ### Cenário 4 - Entrada malformada
 
 **Dado** campo ausente, `prioridade="urgente"`, `status="done"` ou `id_tarefa` duplicado  
 **Quando** a função for executada  
-**Então** lança `EntradaInvalidaError`.
+**Então** lança `TaskValidationError`.
 
-Os Cenários 2 e 3 decompõem o “Cenário 2 - Exceção/Erro” do enunciado da disciplina para ficar testável.
-
-## 9. Test Harness previsto (Fase 2)
+## 9. Test Harness
 
 Arquivo obrigatório: `tests/test_harness.py`.
 
 - `test_cenario_sucesso_metricas_corretas`
 - `test_ignora_pendente_e_cancelada`
 - `test_prioridade_sem_concluidas_retorna_zero`
-- `test_data_conclusao_antes_do_inicio_lanca_data_inconsistente`
-- `test_data_inicio_antes_da_criacao_lanca_data_inconsistente`
-- `test_lista_sem_concluidas_lanca_nenhuma_tarefa_concluida`
-- `test_lista_vazia_lanca_nenhuma_tarefa_concluida`
-- `test_prioridade_invalida_lanca_entrada_invalida`
-- `test_id_duplicado_lanca_entrada_invalida`
+- `test_data_conclusao_antes_da_criacao_lanca_task_validation_error`
+- `test_lista_sem_concluidas_retorna_zero`
+- `test_lista_vazia_retorna_zero`
+- `test_prioridade_invalida_lanca_task_validation_error`
+- `test_id_duplicado_lanca_task_validation_error`
 - `test_assinatura_publica_existe_e_nao_foi_alterada`
 
-É proibido apagar, renomear ou enfraquecer esses cenários na Fase 2.
+## 10. Decisões
 
-## 10. Decisões da versão 1.0
+Versão 1.0 (Fase 1) usava `analisar_tarefas`, minutos e exceção quando não havia concluídas. O enunciado da Fase 2 fechou esses três pontos. A versão 2.0 adota o que ficou definido:
 
-- Campos: contrato formal (`id_tarefa`, `data_criacao`, `data_inicio`, `data_conclusao`, `prazo`, `prioridade`, `status`). Sem `title`.
-- Datas inconsistentes: `DataInconsistenteError`.
-- Zero concluídas: `NenhumaTarefaConcluidaError`.
-- `indicadores_por_prioridade`: dict fixo com `baixa` / `média` / `alta`.
-- Função pública: `analisar_tarefas(tarefas: list[dict]) -> dict`.
-- Bibliotecas: stdlib + `pytest` + pandas/numpy opcionais. Sem Flask.
+- Função pública: `analyze_tasks(tarefas: list[dict]) -> dict`.
+- Exceção única de validação: `TaskValidationError`.
+- Tempo em horas (`tempo_medio_conclusao_horas`), geral e por prioridade.
+- Totais: `total_tarefas`, `total_concluidas`, `total_pendentes`.
+- Lista vazia ou sem concluídas: médias e taxa `0.0`, sem exceção.
+- Campos de entrada continuam os da Fase 1. Sem `title`.
+- Bibliotecas: stdlib + `pytest`. Sem Flask.
