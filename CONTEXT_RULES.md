@@ -38,7 +38,10 @@ Não alterar nome, parâmetros nem tipo de retorno sem nova versão da spec. A v
 
 - Não usar biblioteca fora da lista autorizada.
 - Não alterar, remover ou adaptar os cenários de teste da spec.
-- Não modificar a árvore de pastas do repositório.
+- Não modificar a estrutura existente da aplicação sem autorização. A Fase 3
+  autoriza explicitamente os artefatos de infraestrutura e documentação
+  descritos no desafio: `.github/workflows/`, `Dockerfile`,
+  `docker-compose.yml`, `.dockerignore` e os documentos adicionais em `specs/`.
 - Não persistir dados em arquivo ou banco.
 - Não alterar a assinatura pública de `analyze_tasks`.
 - Não gerar funcionalidade nova sem teste correspondente.
