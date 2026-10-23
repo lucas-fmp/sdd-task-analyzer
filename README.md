@@ -8,7 +8,9 @@ Especificação: versão 2.0 (17 de outubro de 2026)
 
 ## O que este repositório é nesta fase
 
-A **Fase 2** implementa `analyze_tasks` e o Test Harness em `pytest`. O enunciado desta fase fechou a função, a unidade (horas) e o caso sem concluídas (`0.0`). A spec vigente é a versão 2.0.
+A **Fase 3** preserva a implementação da Fase 2 e adiciona uma esteira reproduzível
+de validação. O código pode ser testado localmente, no GitHub Actions e em um
+contêiner Docker baseado em Python 3.11.
 
 O TaskAnalyzer recebe uma lista de tarefas em memória e devolve métricas:
 
@@ -26,13 +28,21 @@ sdd-task-analyzer/
 ├── README.md
 ├── CONTEXT_RULES.md          # regras persistentes para a IA
 ├── .gitignore
+├── .dockerignore
+├── Dockerfile
+├── docker-compose.yml
 ├── requirements.txt
+├── .github/
+│   └── workflows/
+│       └── ci.yml            # testes Python e Docker no GitHub Actions
 ├── specs/
-│   └── task_analyzer_spec.md # contrato SDD (fonte da verdade)
+│   ├── task_analyzer_spec.md # contrato SDD (fonte da verdade)
+│   ├── requirements.yaml     # requisitos e rastreabilidade
+│   └── system_design_document.pdf
 ├── tests/
-│   └── test_harness.py       # Test Harness (pytest) - Fase 2
+│   └── test_harness.py       # Test Harness (pytest)
 └── src/
-    └── task_analyzer.py      # implementação - Fase 2
+    └── task_analyzer.py      # implementação aprovada
 ```
 
 ## Contrato público (congelado)
@@ -45,34 +55,67 @@ Exceção de validação:
 
 - `TaskValidationError`
 
-Sem tarefas concluídas, médias e taxa voltam `0.0`.
+Sem tarefas concluídas, médias e taxa voltam `0.0`, sem exceção.
 
 Detalhes de campos, regras e exemplos numéricos: [`specs/task_analyzer_spec.md`](specs/task_analyzer_spec.md).  
 Regras para geração de código: [`CONTEXT_RULES.md`](CONTEXT_RULES.md).
 
-## Como rodar (a partir da Fase 2)
+## Como rodar localmente
 
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-pytest tests/test_harness.py -v
+python -m pip install -r requirements.txt
+python -m pytest tests/test_harness.py -v
 ```
 
 Python mínimo: **3.11+**.
+
+## Como rodar com Docker
+
+O Compose constrói uma imagem isolada, sem bind mount do ambiente local, e executa
+o mesmo Test Harness usado na CI:
+
+```bash
+docker compose config
+docker compose build tests
+docker compose run --rm tests
+```
+
+O `Dockerfile` usa `python:3.11-slim` e executa os testes com um usuário não-root.
+
+## Integração contínua
+
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) é disparado em
+pushes e Pull Requests para `main` e `develop`. Ele:
+
+1. configura Ubuntu com Python 3.11;
+2. instala `requirements.txt`;
+3. executa `python -m pytest tests/test_harness.py -v`;
+4. constrói a imagem Docker e executa a suíte no Compose.
+
+O selo verde aparece no GitHub quando o workflow roda em um push ou Pull Request para `main` ou `develop`.
 
 ## Fases do projeto
 
 | Fase | Conteúdo | Status |
 | --- | --- | --- |
 | 1 | Especificação SDD, `CONTEXT_RULES`, estrutura do repositório, vídeo | concluída |
-| 2 | Código gerado com IA, pytest, Git Flow e Pull Requests | esta entrega |
-| 3 | GitHub Actions, Docker, relatório de governança e ética | depois |
+| 2 | Código gerado com IA, pytest, Git Flow e Pull Requests | concluída |
+| 3 | GitHub Actions, Docker, rastreabilidade e governança ética | esta entrega |
 
 ## Bibliotecas autorizadas
 
 - biblioteca padrão do Python 3.11+;
-- `pytest` (obrigatório nos testes);
+- `pytest` (obrigatório nos testes e na CI);
 - `pandas` e `numpy` (opcionais; confirmados pelo professor).
 
 Qualquer outra biblioteca exige autorização prévia. Flask e frameworks web estão fora do escopo.
+
+## Limites e segurança
+
+- Os dados das tarefas permanecem em memória e não são enviados para serviços externos.
+- O módulo não toma decisões automáticas sobre pessoas; ele apenas calcula métricas
+  descritivas.
+- A análise de produtividade deve ser interpretada com contexto humano, sem usar
+  uma taxa ou média isolada como critério disciplinar.

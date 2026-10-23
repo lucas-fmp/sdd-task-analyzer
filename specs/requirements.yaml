@@ -1,0 +1,98 @@
+document:
+  name: TaskAnalyzer
+  version: "3.0"
+  language: pt-BR
+  source_of_truth: specs/task_analyzer_spec.md
+  runtime: Python 3.11+
+  dependencies:
+    runtime: []
+    test:
+      - pytest
+
+public_contract:
+  module: src/task_analyzer.py
+  function: analyze_tasks
+  signature: "analyze_tasks(tarefas: list[dict]) -> dict"
+  exception: TaskValidationError
+  empty_completed_batch:
+    tempo_medio_conclusao_horas: 0.0
+    taxa_atraso_percentual: 0.0
+
+functional_requirements:
+  - id: RF01
+    statement: Expor a função pública analyze_tasks(tarefas).
+    verification:
+      - test_assinatura_publica_existe_e_nao_foi_alterada
+  - id: RF02
+    statement: Validar estrutura, tipos, enumeradores, ids e datas antes do cálculo.
+    verification:
+      - test_prioridade_invalida_lanca_task_validation_error
+      - test_id_duplicado_lanca_task_validation_error
+  - id: RF03
+    statement: Considerar somente tarefas com status concluída nas métricas.
+    verification:
+      - test_ignora_pendente_e_cancelada
+  - id: RF04
+    statement: Rejeitar datas em ordem temporal inválida com TaskValidationError.
+    verification:
+      - test_data_conclusao_antes_da_criacao_lanca_task_validation_error
+  - id: RF05
+    statement: Calcular duração em horas e arredondar o resultado para duas casas.
+    verification:
+      - test_cenario_sucesso_metricas_corretas
+  - id: RF06
+    statement: Considerar atraso somente quando data_conclusao for posterior ao prazo.
+    verification:
+      - test_cenario_sucesso_metricas_corretas
+  - id: RF07
+    statement: Devolver indicadores para baixa, média e alta.
+    verification:
+      - test_cenario_sucesso_metricas_corretas
+      - test_prioridade_sem_concluidas_retorna_zero
+  - id: RF08
+    statement: Retornar médias e taxa como 0.0 quando não houver tarefas concluídas.
+    verification:
+      - test_lista_sem_concluidas_retorna_zero
+      - test_lista_vazia_retorna_zero
+
+acceptance_scenarios:
+  - id: cenario-1
+    name: Sucesso com métricas corretas
+    test: test_cenario_sucesso_metricas_corretas
+  - id: cenario-2
+    name: Data inconsistente
+    test: test_data_conclusao_antes_da_criacao_lanca_task_validation_error
+  - id: cenario-3
+    name: Lote sem tarefas concluídas
+    tests:
+      - test_lista_sem_concluidas_retorna_zero
+      - test_lista_vazia_retorna_zero
+  - id: cenario-4
+    name: Entrada malformada
+    tests:
+      - test_prioridade_invalida_lanca_task_validation_error
+      - test_id_duplicado_lanca_task_validation_error
+
+delivery_controls:
+  ci:
+    workflow: .github/workflows/ci.yml
+    triggers:
+      - push: main
+      - push: develop
+      - pull_request: main
+      - pull_request: develop
+    environment: ubuntu-latest
+    python: "3.11"
+    command: python -m pytest tests/test_harness.py -v
+  container:
+    dockerfile: Dockerfile
+    base_image: python:3.11-slim
+    compose_file: docker-compose.yml
+    command: docker compose run --rm tests
+  human_approval:
+    required: true
+    checks:
+      - contrato e assinatura
+      - testes verdes
+      - dependências autorizadas
+      - revisão de segurança e ética
